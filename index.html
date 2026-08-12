@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>sayosaya</title>
+  <style>
+    :root {
+      --bg-main: #ffffff;
+      --text-main: #333333;
+      --bg-panel: #f5f5f5;
+      --border-color: #cccccc;
+      --hover-bg: #f0f0f0;
+      --active-bg: #333333;
+      --active-text: #ffffff;
+      --link-color: #0066cc;
+      --title-color: #ff3366;
+      --status-color: #009966;
+    }
+
+    body.dark-mode {
+      --bg-main: #1e1e1e;
+      --text-main: #e0e0e0;
+      --bg-panel: #2d2d2d;
+      --border-color: #555555;
+      --hover-bg: #3a3a3a;
+      --active-bg: #e0e0e0;
+      --active-text: #1e1e1e;
+      --link-color: #66b3ff;
+      --title-color: #ff6699;
+      --status-color: #33cc99;
+    }
+
+    body { 
+      font-family: system-ui, sans-serif; 
+      max-width: 900px; 
+      margin: 0 auto; 
+      padding: 20px 20px; 
+      line-height: 1.6; 
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      transition: background-color 0.2s, color 0.2s;
+      
+      border-left: 2px solid var(--border-color);
+      border-right: 2px solid var(--border-color);
+      min-height: 100vh; 
+      box-sizing: border-box;
+    }
+
+    .control-panel { background: var(--bg-panel); padding: 5px; border-radius: 4px; margin-bottom: 2px; border: 2px solid var(--border-color); }
+    .category-group { margin-top: 2px; display: flex; gap: 5px; flex-wrap: wrap; }
+    
+    .category-btn { 
+      padding: 3px 12px; border: 2px solid var(--border-color); 
+      background: var(--bg-main); color: var(--text-main); 
+      cursor: pointer; border-radius: 2px; 
+    }
+    .category-btn.active { background: var(--active-bg); color: var(--active-text); border-color: var(--active-bg); }
+    
+    .layout { display: grid; grid-template-columns: 200px 1fr; gap: 5px; }
+    .article-list { list-style: none; padding: 0; margin: 0; }
+    
+    .article-item { 
+      padding: 5px; border: 1px solid var(--border-color); margin-bottom: 8px; 
+      cursor: pointer; border-radius: 4px; position: relative;
+    }
+    .article-item:hover { background: var(--hover-bg); }
+
+    .article-item .date { font-size: 0.8em; opacity: 0.7; }
+    .article-item .classes { font-size: 0.8em; color: var(--link-color); }
+
+    .pagination { margin-top: 10px; display: flex; gap: 5px; justify-content: center; }
+    .page-btn { padding: 4px 10px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-main); cursor: pointer; }
+    .page-btn.active { font-weight: bold; background: var(--hover-bg); }
+
+    .content-view { border: 1px solid var(--border-color); padding: 15px; border-radius: 4px; min-height: 350px; white-space: pre-wrap; text-align: justify; word-break: break-all; }
+    .metadata-box { background: var(--bg-panel); padding: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 10px; }
+    .metadata-box h2 { margin-top: 2px; margin-bottom: 2px; font-size: 1.4em; line-height: 1.2; }
+    .metadata-box p { margin: 2px 2px; font-size: 0.9em; line-height: 1.4; }
+    
+    .guide-text { font-size: 0.9em; margin-bottom: 10px; opacity: 0.8; }
+
+    .main-title { color: var(--title-color); margin-bottom: 1px; }
+    #status { color: var(--status-color); font-weight: bold; margin-left: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2 class="main-title">SAYOSAYA</h2>
+  <div class="guide-text">
+    <strong>Keyboard:</strong> [P] Display | [E/R] Category | [Q/W] Page | [1~5] Select | [M] ?????
+  </div>
+  
+  <div class="control-panel">
+    <span id="status">Connecting to server...</span>
+    <div id="categoryContainer" class="category-group"></div>
+  </div>
+
+  <div class="layout">
+    <div>
+      <h3>index</h3>
+      <ul id="articleList" class="article-list"></ul>
+      <div id="pagination" class="pagination"></div>
+    </div>
+
+    <div>
+      <h3>text</h3>
+      <div id="contentView" class="content-view">empty</div>
+    </div>
+  </div>
+
+  <script>
+    let rawArticles = [];      
+    let filteredArticles = [];   
+    let currentCategory = 'ALL';
+    let currentPage = 1;
+    let categoriesList = ['ALL']; 
+    const ITEMS_PER_PAGE = 5;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById('status').innerText = 'Loading text data...';
+      
+      fetch('data.txt') 
+        .then(response => {
+          if (!response.ok) throw new Error('No File');
+          return response.text();
+        })
+        .then(fullText => {
+          console.time('running time');
+          parseDocument(fullText);
+          sortArticlesByDate(); 
+          console.timeEnd('running time');
+
+          buildCategoryButtons();
+          filterByCategory('ALL');
+          document.getElementById('status').innerText = `On-Air! Total ${rawArticles.length} Text`;
+        })
+        .catch(error => {
+          document.getElementById('status').innerText = 'Fail Load';
+          console.error(error);
+        });
+    });
+
+    function parseDocument(fullText) {
+      rawArticles = [];
+      const blocks = fullText.split('#END#');
+
+      blocks.forEach((block, index) => {
+        const trimmed = block.trim();
+        if (!trimmed) return;
+
+        let title = 'no title';
+        let date = 'no date';
+        let classes = [];
+        let body = trimmed;
+
+        const metaMatch = trimmed.match(/@@@META@@@([\s\S]*?)@@@\/META@@@/);
+        if (metaMatch) {
+          const metaText = metaMatch[1];
+          body = trimmed.replace(metaMatch[0], '').trim();
+
+          metaText.split('\n').forEach(line => {
+            const [key, ...valParts] = line.split(':');
+            if (!key || valParts.length === 0) return;
+            
+            const value = valParts.join(':').trim();
+            const k = key.trim().toLowerCase();
+
+            if (k === 'title') title = value;
+            else if (k === 'date') date = value;
+            else if (k === 'class') {
+              classes = value.split('/').map(c => c.trim()).filter(Boolean);
+            }
+          });
+        }
+        rawArticles.push({ id: index, title, date, classes, body });
+      });
+    }
+
+    function sortArticlesByDate() {
+      rawArticles.sort((a, b) => {
+        const dateA = new Date(a.date).getTime() || 0;
+        const dateB = new Date(b.date).getTime() || 0;
+        return dateB - dateA; 
+      });
+    }
+
+    function buildCategoryButtons() {
+      const container = document.getElementById('categoryContainer');
+      container.innerHTML = '';
+      
+      const classSet = new Set();
+      rawArticles.forEach(a => a.classes.forEach(c => classSet.add(c)));
+
+      categoriesList = ['ALL', ...Array.from(classSet)];
+
+      categoriesList.forEach(className => {
+        createBtn(className, className === 'ALL' ? '전체' : className, container);
+      });
+    }
+
+    function createBtn(catId, label, container) {
+      const btn = document.createElement('button');
+      btn.className = `category-btn ${catId === currentCategory ? 'active' : ''}`;
+      btn.innerText = label;
+      btn.onclick = () => filterByCategory(catId);
+      container.appendChild(btn);
+    }
+
+    function filterByCategory(category) {
+      currentCategory = category;
+      currentPage = 1;
+      document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.innerText === (category === 'ALL' ? '전체' : category));
+      });
+      filteredArticles = category === 'ALL' ? [...rawArticles] : rawArticles.filter(a => a.classes.includes(category));
+      renderList();
+    }
+
+    function renderList() {
+      const listEl = document.getElementById('articleList');
+      listEl.innerHTML = '';
+      const start = (currentPage - 1) * ITEMS_PER_PAGE;
+      const pageData = filteredArticles.slice(start, start + ITEMS_PER_PAGE);
+
+      pageData.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.className = 'article-item';
+        li.innerHTML = `
+          <strong>${item.title}</strong>
+          <div class="date">${item.date}</div>
+          <div class="classes">${item.classes.join(' / ')}</div>
+        `;
+        li.onclick = () => renderContent(item);
+        listEl.appendChild(li);
+      });
+      renderPagination();
+    }
+
+    function renderPagination() {
+      const pagEl = document.getElementById('pagination');
+      pagEl.innerHTML = '';
+      const totalPages = Math.ceil(filteredArticles.length / ITEMS_PER_PAGE);
+      if (totalPages <= 1) return;
+
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement('button');
+        btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+        btn.innerText = i;
+        btn.onclick = () => { currentPage = i; renderList(); };
+        pagEl.appendChild(btn);
+      }
+    }
+
+    function renderContent(item) {
+      document.getElementById('contentView').innerHTML = `
+        <div class="metadata-box">
+          <h2>${item.title}</h2>
+          <p><strong>작성일:</strong> ${item.date}</p>
+          <p><strong>태그:</strong> ${item.classes.join(', ')}</p>
+        </div>
+        <div>${item.body.replace(/\n/g, '<br>')}</div>
+      `;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const key = e.key.toLowerCase();
+      const totalPages = Math.ceil(filteredArticles.length / ITEMS_PER_PAGE);
+
+      if (key === 'p') {
+        document.body.classList.toggle('dark-mode');
+      } else if (key === 'q') {
+        if (currentPage > 1) { currentPage--; renderList(); }
+      } else if (key === 'w') {
+        if (currentPage < totalPages) { currentPage++; renderList(); }
+      } else if (key === 'e') {
+        if (categoriesList.length > 0) {
+          let currentIndex = categoriesList.indexOf(currentCategory);
+          let newIndex = (currentIndex - 1 + categoriesList.length) % categoriesList.length;
+          filterByCategory(categoriesList[newIndex]);
+        }
+      } else if (key === 'r') {
+        if (categoriesList.length > 0) {
+          let currentIndex = categoriesList.indexOf(currentCategory);
+          let newIndex = (currentIndex + 1) % categoriesList.length;
+          filterByCategory(categoriesList[newIndex]);
+        }
+      } else if (['1', '2', '3', '4', '5'].includes(key)) {
+        const index = parseInt(key) - 1;
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        const pageData = filteredArticles.slice(start, start + ITEMS_PER_PAGE);
+        if (pageData[index]) renderContent(pageData[index]);
+      }
+    });
+
+    let mPresses = [];
+    document.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'm') {
+        const now = Date.now();
+        mPresses.push(now);
+        mPresses = mPresses.filter(time => now - time <= 1000);
+        if (mPresses.length === 3) {
+          triggerCollapse();
+          mPresses = []; 
+        }
+      }
+    });
+
+    function triggerCollapse() {
+      const elements = document.querySelectorAll('body div, body span, body button, body h2, body h3, body ul, body li');
+  
+      elements.forEach(el => {
+        const randomX = (Math.random() - 0.5) * 1500; 
+        const bounceY = -(Math.random() * 150 + 50); // 위로 살짝 튕김
+        const dropY = (Math.random() * 1000) + 1200; // 아래로 추락
+        const randomRot = (Math.random() - 0.5) * 720; 
+        const fastDuration = Math.random() * 0.4 + 0.3; // 속도 대폭 증가 (0.3~0.7초)
+    
+        el.style.pointerEvents = 'none'; 
+        
+        el.style.transition = `transform 0.15s ease-out`;
+        el.style.transform = `translate(${randomX * 0.1}px, ${bounceY}px) rotate(${randomRot * 0.1}deg)`;
+
+        setTimeout(() => {
+          el.style.transition = `transform ${fastDuration}s ease-in, opacity ${fastDuration}s`;
+          el.style.transform = `translate(${randomX}px, ${dropY}px) rotate(${randomRot}deg)`;
+          el.style.opacity = '0';
+        }, 150);
+      });
+
+      setTimeout(() => {
+        const blackout = document.createElement('div');
+        blackout.id = 'system-blackout';
+        blackout.style.cssText = `
+          position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+          background-color: #000; z-index: 9999;
+          display: flex; justify-content: center; align-items: center; overflow: hidden;
+        `;
+        
+        const style = document.createElement('style');
+        style.innerHTML = `
+          @keyframes flyIn {
+            0% { transform: scale(3) translate(var(--startX), var(--startY)); opacity: 0; filter: blur(5px); }
+            100% { transform: scale(1) translate(0, 0); opacity: 1; filter: blur(0); }
+          }
+          @keyframes glitch {
+            0% { text-shadow: 2px 0 0 red, -2px 0 0 cyan; }
+            20% { text-shadow: -2px 0 0 red, 2px 0 0 cyan; }
+            40% { text-shadow: 2px 0 0 red, -2px 0 0 cyan; }
+            60% { text-shadow: -2px 0 0 red, 2px 0 0 cyan; }
+            80% { text-shadow: 2px 0 0 red, -2px 0 0 cyan; }
+            100% { text-shadow: -2px 0 0 red, 2px 0 0 cyan; }
+          }
+          .monika-fly {
+            position: absolute; color: #fff; font-size: 4rem; font-weight: bold; font-family: monospace; letter-spacing: 0.5rem;
+            animation: flyIn 0.3s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+          }
+          .monika-center {
+            position: absolute; color: #fff; font-size: 5rem; font-weight: bold; font-family: monospace; letter-spacing: 1rem;
+            text-shadow: 0 0 20px #00ff00, 0 0 40px #00ff00; /* 초록색 백라이트 */
+            animation: glitch 0.1s infinite;
+          }
+        `;
+        blackout.appendChild(style);
+
+        const directions = [ {x: '-50vw', y: '-50vh'}, {x: '50vw', y: '-50vh'}, {x: '-50vw', y: '50vh'}, {x: '50vw', y: '50vh'} ];
+        directions.forEach((dir) => {
+          const text = document.createElement('div');
+          text.className = 'monika-fly';
+          text.innerText = "M O N I K A";
+          text.style.setProperty('--startX', dir.x);
+          text.style.setProperty('--startY', dir.y);
+          blackout.appendChild(text);
+        });
+
+        setTimeout(() => {
+          blackout.innerHTML = ''; 
+          blackout.appendChild(style); 
+          const centerText = document.createElement('div');
+          centerText.className = 'monika-center';
+          centerText.innerText = "M O N I K A";
+          blackout.appendChild(centerText);
+        }, 300);
+
+        document.body.appendChild(blackout);
+
+        setTimeout(() => {
+          elements.forEach(el => {
+            el.style.transition = ''; el.style.transform = ''; el.style.opacity = ''; el.style.pointerEvents = '';
+          });
+          blackout.remove();
+        }, 1000); 
+      }, 800);
+    }
+  </script>
+</body>
+</html>
