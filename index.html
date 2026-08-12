@@ -72,20 +72,30 @@
     .page-btn { padding: 4px 10px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-main); cursor: pointer; }
     .page-btn.active { font-weight: bold; background: var(--hover-bg); }
 
-    .content-view { border: 1px solid var(--border-color); padding: 15px; border-radius: 4px; min-height: 350px; white-space: pre-wrap; text-align: justify; word-break: break-all; }
+
+    .content-view { border: 1px solid var(--border-color); padding: 15px; border-radius: 4px; min-height: 350px; }
+    .body-text { white-space: pre-wrap; text-align: justify; word-break: break-all; margin-top: 10px; }
+    .header-container { display: flex; align-items: center; gap: 15px; margin-bottom: 5px; }
+    .main-title { color: var(--title-color); margin: 0; }
+    .theme-btn { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; font-size: 1.2em; padding: 4px 8px; transition: background-color 0.2s; }
+    .theme-btn:hover { background: var(--hover-bg); }
+
     .metadata-box { background: var(--bg-panel); padding: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 10px; white-space: normal; }
     .metadata-box h2 { margin-top: 2px; margin-bottom: 2px; font-size: 1.4em; line-height: 1.2; }
     .metadata-box p { margin: 2px 2px; font-size: 0.9em; line-height: 1.4; }
     
     .guide-text { font-size: 0.9em; margin-bottom: 10px; opacity: 0.8; }
-
-    .main-title { color: var(--title-color); margin-bottom: 1px; }
     #status { color: var(--status-color); font-weight: bold; margin-left: 10px; }
   </style>
 </head>
 <body>
 
+<!-- 수정 후 -->
+  <div class="header-container">
   <h2 class="main-title">SAYOSAYA</h2>
+  <button id="themeToggleBtn" class="theme-btn" title="다크모드 토글">🌃</button>
+</div>
+
   <div class="guide-text">
     <strong>Keyboard:</strong> [P] Display | [E/R] Category | [Q/W] Page | [1~5] Select | [M] ?????
   </div>
@@ -252,17 +262,16 @@
     }
 
     function renderContent(item) {
-      document.getElementById('contentView').innerHTML = `
-        <div class="metadata-box">
-          <h2>${item.title}</h2>
-          <p><strong>작성일:</strong> ${item.date}</p>
-          <p><strong>태그:</strong> ${item.classes.join(', ')}</p>
-        </div>
-        <div>${item.body.replace(/\n/g, '<br>')}</div>
-      `;
-    }
-
-    document.addEventListener('keydown', (e) => {
+    document.getElementById('contentView').innerHTML = 
+    '<div class="metadata-box">' +
+      '<h2>' + item.title + '</h2>' +
+      '<p><strong>작성일:</strong> ' + item.date + '</p>' +
+      '<p><strong>태그:</strong> ' + item.classes.join(', ') + '</p>' +
+    '</div>' +
+    // pre-wrap이 걸린 body-text 안에서는 item.body 원본의 \n이 자연스럽게 줄바꿈됩니다.
+    '<div class="body-text">' + item.body + '</div>'; 
+}
+      document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
       const key = e.key.toLowerCase();
@@ -393,6 +402,10 @@
         }, 1000); 
       }, 800);
     }
+
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
+    });
   </script>
 </body>
 </html>
